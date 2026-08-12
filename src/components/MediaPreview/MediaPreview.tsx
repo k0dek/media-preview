@@ -167,25 +167,15 @@ export function MediaPreview({
 
   useEffect(() => {
     if (!open) return
-    const sbw = window.innerWidth - document.documentElement.clientWidth
     const html = document.documentElement
-    const prev = {
-      bodyOverflow: document.body.style.overflow,
-      bodyPadding: document.body.style.paddingRight,
-      htmlOverflow: html.style.overflow,
-      htmlPadding: html.style.paddingRight,
-    }
+    const prevBody = document.body.style.overflow
+    const prevHtml = html.style.overflow
+    // scrollbar-gutter: stable on html keeps width; only lock scroll here.
     document.body.style.overflow = "hidden"
     html.style.overflow = "hidden"
-    if (sbw > 0) {
-      document.body.style.paddingRight = `${sbw}px`
-      html.style.paddingRight = `${sbw}px`
-    }
     return () => {
-      document.body.style.overflow = prev.bodyOverflow
-      document.body.style.paddingRight = prev.bodyPadding
-      html.style.overflow = prev.htmlOverflow
-      html.style.paddingRight = prev.htmlPadding
+      document.body.style.overflow = prevBody
+      html.style.overflow = prevHtml
     }
   }, [open])
 
