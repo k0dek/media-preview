@@ -39,7 +39,7 @@ function clamp(n: number, min: number, max: number) {
 
 function targetSize(item: { width: number; height: number }) {
   const maxW = Math.min(window.innerWidth * 0.92, 980)
-  const maxH = Math.min(window.innerHeight * 0.7, 760)
+  const maxH = Math.min(window.innerHeight * 0.68, 720)
   const scale = Math.min(maxW / item.width, maxH / item.height, 1)
   return {
     width: Math.round(item.width * scale),
@@ -51,6 +51,20 @@ function centerPos(size: { width: number; height: number }) {
   return {
     top: Math.round((window.innerHeight - size.height) / 2),
     left: Math.round((window.innerWidth - size.width) / 2),
+  }
+}
+
+/** Map a fixed centered box so it visually matches `rect` (FLIP). */
+function flipFrom(rect: OriginRect, size: { width: number; height: number }, pos: { top: number; left: number }) {
+  const fromCx = rect.left + rect.width / 2
+  const fromCy = rect.top + rect.height / 2
+  const toCx = pos.left + size.width / 2
+  const toCy = pos.top + size.height / 2
+  return {
+    x: fromCx - toCx,
+    y: fromCy - toCy,
+    scaleX: rect.width / size.width,
+    scaleY: rect.height / size.height,
   }
 }
 
@@ -66,6 +80,8 @@ export function MediaPreview({
   const reduceMotion = useReducedMotion()
   const titleId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
+  const openFrom = useRef<OriginRect | null>(null)
+  const exitTo = useRef<OriginRect | null>(null)
 
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -77,18 +93,33 @@ export function MediaPreview({
     ox: number
     oy: number
   } | null>(null)
-  const openOrigin = useRef<OriginRect | null>(null)
 
   const item = items[index]
   const count = items.length
   const canZoom = !!item && item.kind === "image" && !reduceMotion
   const isZoomed = zoom > 1
 
-  // Freeze the open-from rect for this session so exit can use an updated tile rect.
+  const box =
+    item && typeof window !== "undefined"
+      ? (() => {
+          const size = targetSize(item)
+          const pos = centerPos(size)
+          return { ...size, ...pos }
+        })()
+      : { width: 600, height: 400, top: 0, left: 0 }
+
   useEffect(() => {
-    if (open && origin) openOrigin.current = origin
+    if (open && origin) {
+      openFrom.current = origin
+      exitTo.current = origin
+    }
     if (!open) setGesturesOn(false)
   }, [open, origin])
+
+  // Keep exit target in sync when parent updates origin (on close / navigate).
+  useEffect(() => {
+    if (origin) exitTo.current = origin
+  }, [origin])
 
   const resetView = useCallback(() => {
     setZoom(1)
@@ -222,15 +253,11 @@ export function MediaPreview({
 
   if (!item) return null
 
-  const size = typeof window !== "undefined" ? targetSize(item) : { width: 600, height: 400 }
-  const centered = typeof window !== "undefined" ? centerPos(size) : { top: 0, left: 0 }
-  const from = openOrigin.current ?? origin
-  const to = origin ?? from
-
-  const frameStyle =
-    gesturesOn && (isZoomed || offset.x !== 0 || offset.y !== 0)
-      ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }
-      : undefined
+  const from = openFrom.current ?? origin
+  const to = exitTo.current ?? origin
+  const size = { width: box.width, height: box.height }
+  const pos = { top: box.top, left: box.left }
+  const readyBox = box.width > 0 && (from || reduceMotion)
 
   return (
     <div
@@ -379,48 +406,26 @@ export function MediaPreview({
 
       <AnimatePresence
         onExitComplete={() => {
-          openOrigin.current = null
+          openFrom.current = null
+          exitTo.current = null
           onExitComplete?.()
         }}
       >
-        {open && from && (
-          <motion.div key="photo-stage" className="mp__stage" onWheel={onWheel}>
+        {open && readyBox && from && (
+          <div key="photo-stage" className="mp__stage" onWheel={onWheel}>
             <motion.div
               className="mp__frame"
               initial={
                 reduceMotion
-                  ? {
-                      ...centered,
-                      width: size.width,
-                      height: size.height,
-                      opacity: 0,
-                    }
-                  : {
-                      top: from.top,
-                      left: from.left,
-                      width: from.width,
-                      height: from.height,
-                      opacity: 1,
-                    }
+                  ? { opacity: 0, x: 0, y: 0, scaleX: 1, scaleY: 1 }
+                  : { opacity: 1, ...flipFrom(from, size, pos) }
               }
-              animate={{
-                top: centered.top,
-                left: centered.left,
-                width: size.width,
-                height: size.height,
-                opacity: 1,
-              }}
+              animate={{ opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 }}
               exit={
                 reduceMotion
                   ? { opacity: 0 }
                   : to
-                    ? {
-                        top: to.top,
-                        left: to.left,
-                        width: to.width,
-                        height: to.height,
-                        opacity: 1,
-                      }
+                    ? { opacity: 1, ...flipFrom(to, size, pos) }
                     : { opacity: 0 }
               }
               transition={reduceMotion ? { duration: 0.15 } : spring}
@@ -428,43 +433,59 @@ export function MediaPreview({
                 if (open) setGesturesOn(true)
               }}
               style={{
-                ...frameStyle,
                 position: "fixed",
+                top: pos.top,
+                left: pos.left,
+                width: size.width,
+                height: size.height,
                 borderRadius: 16,
                 overflow: "hidden",
-                cursor: isZoomed
-                  ? dragging
-                    ? "grabbing"
-                    : "grab"
-                  : "default",
-              }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onDoubleClick={() => {
-                if (!canZoom || !gesturesOn) return
-                if (isZoomed) resetView()
-                else setZoom(2.15)
+                transformOrigin: "center center",
               }}
             >
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.img
-                  key={item.id}
-                  className="mp__media"
-                  src={item.src}
-                  alt={item.title}
-                  width={item.width}
-                  height={item.height}
-                  draggable={false}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.18 }}
-                />
-              </AnimatePresence>
+              <div
+                className="mp__zoom"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  transform:
+                    gesturesOn && (isZoomed || offset.x || offset.y)
+                      ? `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`
+                      : undefined,
+                  cursor: isZoomed
+                    ? dragging
+                      ? "grabbing"
+                      : "grab"
+                    : "default",
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onDoubleClick={() => {
+                  if (!canZoom || !gesturesOn) return
+                  if (isZoomed) resetView()
+                  else setZoom(2.15)
+                }}
+              >
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.img
+                    key={item.id}
+                    className="mp__media"
+                    src={item.src}
+                    alt={item.title}
+                    width={item.width}
+                    height={item.height}
+                    draggable={false}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.16 }}
+                  />
+                </AnimatePresence>
+              </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

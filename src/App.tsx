@@ -47,10 +47,9 @@ export default function App() {
 
   function handleClose() {
     const rect = readTileRect(index) ?? origin
-    setOrigin(rect)
+    if (rect) setOrigin(rect)
     setHiddenId(gallery[index]?.id ?? null)
-    // Commit the exit target for one frame, then unmount so AnimatePresence can morph back.
-    requestAnimationFrame(() => setOpen(false))
+    setOpen(false)
   }
 
   function handleIndexChange(next: number) {
