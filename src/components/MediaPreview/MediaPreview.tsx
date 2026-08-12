@@ -54,17 +54,12 @@ function centerPos(size: { width: number; height: number }) {
   }
 }
 
-/** Map a fixed centered box so it visually matches `rect` (FLIP). */
-function flipFrom(rect: OriginRect, size: { width: number; height: number }, pos: { top: number; left: number }) {
-  const fromCx = rect.left + rect.width / 2
-  const fromCy = rect.top + rect.height / 2
-  const toCx = pos.left + size.width / 2
-  const toCy = pos.top + size.height / 2
+function rectProps(rect: OriginRect) {
   return {
-    x: fromCx - toCx,
-    y: fromCy - toCy,
-    scaleX: rect.width / size.width,
-    scaleY: rect.height / size.height,
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
   }
 }
 
@@ -422,15 +417,18 @@ export function MediaPreview({
             className="mp__frame"
             initial={
               reduceMotion
-                ? { opacity: 0, x: 0, y: 0, scaleX: 1, scaleY: 1 }
-                : { opacity: 1, ...flipFrom(from, size, pos) }
+                ? { ...rectProps({ top: pos.top, left: pos.left, width: size.width, height: size.height }), opacity: 0 }
+                : { ...rectProps(from), opacity: 1 }
             }
-            animate={{ opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 }}
+            animate={{
+              ...rectProps({ top: pos.top, left: pos.left, width: size.width, height: size.height }),
+              opacity: 1,
+            }}
             exit={
               reduceMotion
                 ? { opacity: 0 }
                 : to
-                  ? { opacity: 1, ...flipFrom(to, size, pos) }
+                  ? { ...rectProps(to), opacity: 1 }
                   : { opacity: 0 }
             }
             transition={reduceMotion ? { duration: 0.15 } : spring}
@@ -439,13 +437,8 @@ export function MediaPreview({
             }}
             style={{
               position: "fixed",
-              top: pos.top,
-              left: pos.left,
-              width: size.width,
-              height: size.height,
               borderRadius: 16,
               overflow: "hidden",
-              transformOrigin: "center center",
               zIndex: 2,
               pointerEvents: "auto",
             }}
@@ -485,7 +478,7 @@ export function MediaPreview({
                   width={item.width}
                   height={item.height}
                   draggable={false}
-                  initial={{ opacity: 0 }}
+                  initial={{ opacity: 1 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: reduceMotion ? 0 : 0.16 }}
