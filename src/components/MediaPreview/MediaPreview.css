@@ -150,6 +150,9 @@
   z-index: 2;
   display: grid;
   place-items: center;
+  /* Keep photo optically centered between top chrome and thumbs */
+  padding: 4.75rem 3.25rem 4.5rem;
+  box-sizing: border-box;
   pointer-events: none;
   touch-action: none;
 }
@@ -159,12 +162,13 @@
   display: grid;
   place-items: center;
   max-width: min(92vw, 980px);
-  max-height: min(78vh, 820px);
+  max-height: 100%;
 }
 
 .mp__media {
+  display: block;
   max-width: min(92vw, 980px);
-  max-height: min(78vh, 820px);
+  max-height: min(70vh, 760px);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -228,9 +232,12 @@
     display: none;
   }
 
-  .mp__media,
-  .mp__frame {
+  .mp__stage {
+    padding: 4rem 0 4.25rem;
+  }
+
+  .mp__media {
     max-width: 100vw;
-    max-height: min(70vh, 640px);
+    max-height: min(68vh, 620px);
   }
 }

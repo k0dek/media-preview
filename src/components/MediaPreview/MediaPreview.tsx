@@ -47,6 +47,8 @@ export function MediaPreview({
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
+  /** Gestures/zoom only after shared-element morph finishes — avoids off-center residue. */
+  const [gesturesOn, setGesturesOn] = useState(false)
   const panOrigin = useRef<{
     x: number
     y: number
@@ -65,10 +67,11 @@ export function MediaPreview({
   }, [])
 
   const requestClose = useCallback(() => {
-    // Clear transforms before shared-element close so morph geometry is clean.
     setZoom(1)
     setOffset({ x: 0, y: 0 })
-    onClose()
+    setGesturesOn(false)
+    // Commit identity transforms for one frame, then hand layoutId back to the grid.
+    requestAnimationFrame(() => onClose())
   }, [onClose])
 
   const go = useCallback(
@@ -76,6 +79,7 @@ export function MediaPreview({
       if (!count) return
       setZoom(1)
       setOffset({ x: 0, y: 0 })
+      setGesturesOn(false)
       onIndexChange(((next % count) + count) % count)
     },
     [count, onIndexChange],
@@ -83,14 +87,14 @@ export function MediaPreview({
 
   const zoomBy = useCallback(
     (delta: number) => {
-      if (!canZoom) return
+      if (!canZoom || !gesturesOn) return
       setZoom((z) => {
         const next = clamp(Number((z + delta).toFixed(2)), MIN_ZOOM, MAX_ZOOM)
         if (next === 1) setOffset({ x: 0, y: 0 })
         return next
       })
     },
-    [canZoom],
+    [canZoom, gesturesOn],
   )
 
   const toggleFullscreen = useCallback(async () => {
@@ -123,6 +127,7 @@ export function MediaPreview({
     if (!open) {
       setZoom(1)
       setOffset({ x: 0, y: 0 })
+      setGesturesOn(false)
     }
   }, [open])
 
@@ -164,14 +169,21 @@ export function MediaPreview({
     return () => window.clearTimeout(t)
   }, [open, index])
 
+  // Fallback if layout animation complete never fires (reduced motion / interrupted).
+  useEffect(() => {
+    if (!open) return
+    const t = window.setTimeout(() => setGesturesOn(true), reduceMotion ? 0 : 650)
+    return () => window.clearTimeout(t)
+  }, [open, index, reduceMotion])
+
   const onWheel = (e: ReactWheelEvent) => {
-    if (!canZoom) return
+    if (!canZoom || !gesturesOn) return
     e.preventDefault()
     zoomBy(e.deltaY > 0 ? -0.18 : 0.18)
   }
 
   const onPointerDown = (e: ReactPointerEvent) => {
-    if (!canZoom || zoom <= 1) return
+    if (!canZoom || !gesturesOn || zoom <= 1) return
     e.currentTarget.setPointerCapture(e.pointerId)
     panOrigin.current = {
       x: e.clientX,
@@ -354,14 +366,48 @@ export function MediaPreview({
         )}
       </AnimatePresence>
 
-      {/*
-        Shared image stays outside delayed AnimatePresence exits.
-        No transformed ancestors — drag/zoom live on this node only, and are
-        cleared before close so the return morph matches open.
-      */}
       {open && (
-        <div className="mp__stage" onWheel={onWheel}>
-          <div className="mp__frame">
+        <div className="mp__stage">
+          {/*
+            Zoom/drag live on the FRAME, never on the layoutId image.
+            Gestures stay off until morph completes so centering can't drift.
+          */}
+          <motion.div
+            className="mp__frame"
+            drag={gesturesOn && !isZoomed && !reduceMotion}
+            dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+            dragElastic={0.18}
+            onDragEnd={onDragEnd}
+            onWheel={onWheel}
+            animate={
+              gesturesOn
+                ? { scale: zoom, x: offset.x, y: offset.y }
+                : { scale: 1, x: 0, y: 0 }
+            }
+            transition={
+              gesturesOn
+                ? { type: "spring", stiffness: 400, damping: 40 }
+                : { duration: 0 }
+            }
+            style={{
+              cursor: isZoomed
+                ? dragging
+                  ? "grabbing"
+                  : "grab"
+                : gesturesOn
+                  ? "grab"
+                  : "default",
+            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onDoubleClick={() => {
+              if (!canZoom || !gesturesOn) return
+              if (isZoomed) resetView()
+              else setZoom(2.15)
+            }}
+          >
             <motion.img
               key={item.id}
               layoutId={`photo-${item.id}`}
@@ -371,29 +417,11 @@ export function MediaPreview({
               width={item.width}
               height={item.height}
               draggable={false}
-              drag={!isZoomed && !reduceMotion}
-              dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-              dragElastic={0.18}
-              onDragEnd={onDragEnd}
-              style={{
-                borderRadius: 16,
-                scale: zoom,
-                x: offset.x,
-                y: offset.y,
-                cursor: isZoomed ? (dragging ? "grabbing" : "grab") : "grab",
-              }}
+              style={{ borderRadius: 16 }}
               transition={morphTransition}
-              onDoubleClick={() => {
-                if (!canZoom) return
-                if (isZoomed) resetView()
-                else setZoom(2.15)
-              }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
+              onLayoutAnimationComplete={() => setGesturesOn(true)}
             />
-          </div>
+          </motion.div>
         </div>
       )}
 
