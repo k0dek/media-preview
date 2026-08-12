@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { LayoutGroup, MotionConfig, motion } from "motion/react"
-import { gallery } from "./data/media"
+import { gallery, preloadGallery } from "./data/media"
 import { MediaPreview } from "./components/MediaPreview/MediaPreview"
 import "./App.css"
 
@@ -14,8 +14,20 @@ const morphTransition = {
 export default function App() {
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void preloadGallery().then(() => {
+      if (!cancelled) setReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function openAt(i: number) {
+    if (!ready) return
     setIndex(i)
     setOpen(true)
   }
@@ -29,9 +41,13 @@ export default function App() {
           </header>
 
           <main className="stage">
-            <p className="lede">Click a photo — it should morph into the preview.</p>
+            <p className="lede">
+              {ready
+                ? "Click a photo — it should morph into the preview."
+                : "Loading photos…"}
+            </p>
 
-            <ul className="grid">
+            <ul className={`grid ${ready ? "grid--ready" : ""}`}>
               {gallery.map((item, i) => {
                 const isActive = open && index === i
                 return (
@@ -41,19 +57,22 @@ export default function App() {
                       className="tile__hit"
                       onClick={() => openAt(i)}
                       aria-label={`Open ${item.title}`}
+                      disabled={!ready}
                     >
                       {/*
-                        Unmount the shared element while open so Motion can
-                        morph between this node and the overlay image.
+                        Unmount while open so Motion can morph this node into
+                        the overlay image. Same `src` as the overlay is required
+                        for a correct first-open morph.
                       */}
                       {!isActive ? (
                         <motion.img
                           layoutId={`photo-${item.id}`}
                           className="tile__img"
-                          src={item.thumb}
+                          src={item.src}
                           alt=""
                           width={item.width}
                           height={item.height}
+                          draggable={false}
                           style={{ borderRadius: 16 }}
                           transition={morphTransition}
                         />

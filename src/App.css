@@ -55,8 +55,16 @@
   cursor: zoom-in;
 }
 
-.tile__hit:active {
+.tile__hit:disabled {
+  cursor: wait;
+}
+
+.tile__hit:active:not(:disabled) {
   transform: scale(0.985);
+}
+
+.grid:not(.grid--ready) .tile__img {
+  opacity: 0.35;
 }
 
 .tile__img {

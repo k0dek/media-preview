@@ -4,8 +4,6 @@ export type PreviewItem = {
   id: string
   kind: MediaKind
   src: string
-  thumb: string
-  poster?: string
   width: number
   height: number
   title: string

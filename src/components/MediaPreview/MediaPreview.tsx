@@ -42,7 +42,7 @@ export function MediaPreview({
 }: MediaPreviewProps) {
   const reduceMotion = useReducedMotion()
   const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -56,7 +56,7 @@ export function MediaPreview({
 
   const item = items[index]
   const count = items.length
-  const canZoom = item?.kind === "image" && !reduceMotion
+  const canZoom = !!item && item.kind === "image" && !reduceMotion
 
   const resetView = useCallback(() => {
     setZoom(1)
@@ -66,8 +66,7 @@ export function MediaPreview({
   const go = useCallback(
     (next: number) => {
       if (!count) return
-      const wrapped = ((next % count) + count) % count
-      onIndexChange(wrapped)
+      onIndexChange(((next % count) + count) % count)
       resetView()
     },
     [count, onIndexChange, resetView],
@@ -86,7 +85,7 @@ export function MediaPreview({
   )
 
   const toggleFullscreen = useCallback(async () => {
-    const el = dialogRef.current
+    const el = rootRef.current
     if (!el) return
     if (!document.fullscreenElement) await el.requestFullscreen?.()
     else await document.exitFullscreen?.()
@@ -145,7 +144,7 @@ export function MediaPreview({
 
   useEffect(() => {
     if (!open) return
-    const t = window.setTimeout(() => dialogRef.current?.focus(), 20)
+    const t = window.setTimeout(() => rootRef.current?.focus(), 20)
     return () => window.clearTimeout(t)
   }, [open, index])
 
@@ -196,20 +195,23 @@ export function MediaPreview({
     }
   }
 
+  if (!item) return null
+
   return (
-    <AnimatePresence>
-      {open && item && (
-        <motion.div
-          key="preview-root"
-          ref={dialogRef}
-          className="mp"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-        >
-          {/* Backdrop fades — does not participate in layoutId morph */}
+    <div
+      ref={rootRef}
+      className={`mp ${open ? "mp--open" : ""}`}
+      role={open ? "dialog" : undefined}
+      aria-modal={open ? true : undefined}
+      aria-labelledby={open ? titleId : undefined}
+      tabIndex={open ? -1 : undefined}
+      aria-hidden={!open}
+    >
+      {/* Fade-only chrome — never wrap the shared image in delayed exit */}
+      <AnimatePresence>
+        {open && (
           <motion.button
+            key="backdrop"
             type="button"
             className="mp__backdrop"
             aria-label="Close preview"
@@ -219,14 +221,22 @@ export function MediaPreview({
             transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
             onClick={onClose}
           />
+        )}
+      </AnimatePresence>
 
-          {/* Chrome fades in after the morph has started */}
+      <AnimatePresence>
+        {open && (
           <motion.header
+            key="top"
             className="mp__top"
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: reduceMotion ? 0 : 0.18, delay: reduceMotion ? 0 : 0.08, ease: "easeOut" }}
+            transition={{
+              duration: reduceMotion ? 0 : 0.18,
+              delay: reduceMotion ? 0 : 0.05,
+              ease: "easeOut",
+            }}
           >
             <div className="mp__meta">
               <p id={titleId} className="mp__title">
@@ -261,82 +271,100 @@ export function MediaPreview({
               </button>
             </div>
           </motion.header>
+        )}
+      </AnimatePresence>
 
+      <AnimatePresence>
+        {open && (
           <motion.button
+            key="prev"
             type="button"
             className="mp__nav mp__nav--prev"
             aria-label="Previous"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, delay: 0.1 }}
+            transition={{ duration: 0.15, delay: 0.08 }}
             onClick={() => go(index - 1)}
           >
             <IconChevron className="mp__nav-icon mp__nav-icon--flip" />
           </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {open && (
           <motion.button
+            key="next"
             type="button"
             className="mp__nav mp__nav--next"
             aria-label="Next"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, delay: 0.1 }}
+            transition={{ duration: 0.15, delay: 0.08 }}
             onClick={() => go(index + 1)}
           >
             <IconChevron />
           </motion.button>
+        )}
+      </AnimatePresence>
 
-          {/*
-            Stage is only a positioning shell. The shared element is the image
-            itself — never wrap it in mode="wait" AnimatePresence on open/close.
-          */}
-          <motion.div
-            className="mp__stage"
-            drag={zoom === 1 && !reduceMotion ? true : false}
-            dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-            dragElastic={0.2}
-            onDragEnd={onDragEnd}
-            onWheel={onWheel}
-          >
-            {/*
-              No key remount here — remounting kills the shared-element morph.
-              layoutId alone ties this node to the grid thumbnail.
-            */}
-            <motion.img
-              layoutId={`photo-${item.id}`}
-              className="mp__media"
-              src={item.src}
-              alt={item.title}
-              width={item.width}
-              height={item.height}
-              draggable={false}
-              style={{
-                borderRadius: 16,
-                scale: zoom,
-                x: offset.x,
-                y: offset.y,
-                cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
-              }}
-              transition={morphTransition}
-              onDoubleClick={() => {
-                if (!canZoom) return
-                if (zoom > 1) resetView()
-                else setZoom(2.15)
-              }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-            />
-          </motion.div>
+      {/*
+        Shared element lives OUTSIDE AnimatePresence exit delays.
+        Open/close = grid thumb unmounts/remounts in the same commit as this node.
+      */}
+      {open && (
+        <motion.div
+          className="mp__stage"
+          drag={zoom === 1 && !reduceMotion ? true : false}
+          dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+          dragElastic={0.2}
+          onDragEnd={onDragEnd}
+          onWheel={onWheel}
+        >
+          <motion.img
+            layoutId={`photo-${item.id}`}
+            className="mp__media"
+            src={item.src}
+            alt={item.title}
+            width={item.width}
+            height={item.height}
+            draggable={false}
+            style={{
+              borderRadius: 16,
+              scale: zoom,
+              x: offset.x,
+              y: offset.y,
+              cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
+            }}
+            transition={morphTransition}
+            onDoubleClick={() => {
+              if (!canZoom) return
+              if (zoom > 1) resetView()
+              else setZoom(2.15)
+            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          />
+        </motion.div>
+      )}
 
+      <AnimatePresence>
+        {open && (
           <motion.footer
+            key="thumbs"
             className="mp__thumbs"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: reduceMotion ? 0 : 0.18, delay: reduceMotion ? 0 : 0.1, ease: "easeOut" }}
+            transition={{
+              duration: reduceMotion ? 0 : 0.18,
+              delay: reduceMotion ? 0 : 0.08,
+              ease: "easeOut",
+            }}
           >
             <div className="mp__thumbs-track" role="list">
               {items.map((thumb, i) => (
@@ -349,13 +377,13 @@ export function MediaPreview({
                   aria-label={`Go to ${thumb.title}`}
                   aria-current={i === index}
                 >
-                  <img src={thumb.thumb} alt="" />
+                  <img src={thumb.src} alt="" />
                 </button>
               ))}
             </div>
           </motion.footer>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
