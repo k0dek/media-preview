@@ -1,0 +1,333 @@
+.mp {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  outline: none;
+  color: #f4efe6;
+  --mp-accent: #f2c14e;
+  --mp-panel: rgba(18, 17, 15, 0.72);
+  --mp-line: rgba(244, 239, 230, 0.12);
+}
+
+.mp__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: zoom-out;
+  background:
+    radial-gradient(1200px 700px at 50% 0%, rgba(242, 193, 78, 0.12), transparent 55%),
+    rgba(8, 8, 7, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.mp__chrome {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.mp__chrome--on {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.mp__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem 0.75rem;
+  background: linear-gradient(to bottom, rgba(8, 8, 7, 0.72), transparent);
+}
+
+.mp__meta {
+  min-width: 0;
+}
+
+.mp__title {
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.mp__caption {
+  margin: 0.35rem 0 0;
+  max-width: 42ch;
+  color: rgba(244, 239, 230, 0.72);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.mp__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.mp__counter {
+  margin-right: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  background: var(--mp-panel);
+  border: 1px solid var(--mp-line);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+.mp__counter span {
+  opacity: 0.45;
+  margin: 0 0.15rem;
+}
+
+.mp__btn {
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-line);
+  background: var(--mp-panel);
+  color: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.mp__btn:hover {
+  background: rgba(242, 193, 78, 0.16);
+  border-color: rgba(242, 193, 78, 0.35);
+}
+
+.mp__btn:active {
+  transform: scale(0.96);
+}
+
+.mp__btn--close:hover {
+  background: rgba(255, 90, 70, 0.18);
+  border-color: rgba(255, 90, 70, 0.4);
+}
+
+.mp__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-line);
+  background: var(--mp-panel);
+  color: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.mp__nav:hover {
+  background: rgba(242, 193, 78, 0.16);
+  border-color: rgba(242, 193, 78, 0.35);
+}
+
+.mp__nav--prev {
+  left: 0.85rem;
+}
+
+.mp__nav--next {
+  right: 0.85rem;
+}
+
+.mp__nav-icon--flip {
+  transform: scaleX(-1);
+}
+
+.mp__stage {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 1180px);
+  height: min(68vh, 760px);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+
+.mp__frame {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.mp__media {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.mp__video-wrap {
+  width: min(100%, 1080px);
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.mp__media--video {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mp__thumbs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 1.5rem 1rem 0.85rem;
+  background: linear-gradient(to top, rgba(8, 8, 7, 0.88), transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.mp__thumbs--on {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.mp__thumbs-track {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.55rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(242, 193, 78, 0.45) transparent;
+}
+
+.mp__thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #1a1916;
+  opacity: 0.62;
+  transition: opacity 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.mp__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mp__thumb:hover {
+  opacity: 0.9;
+}
+
+.mp__thumb--active {
+  opacity: 1;
+  border-color: var(--mp-accent);
+  transform: translateY(-2px);
+}
+
+.mp__thumb-badge {
+  position: absolute;
+  inset: auto 4px 4px auto;
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: rgba(8, 8, 7, 0.75);
+  color: var(--mp-accent);
+}
+
+.mp__credit {
+  margin: 0.15rem 0 0;
+  color: rgba(244, 239, 230, 0.45);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.mp__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 5.6rem;
+  z-index: 2;
+  translate: -50% 0;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(8, 8, 7, 0.45);
+  color: rgba(244, 239, 230, 0.55);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+@media (max-width: 720px) {
+  .mp__stage {
+    width: 100vw;
+    height: min(58vh, 520px);
+  }
+
+  .mp__nav {
+    display: none;
+  }
+
+  .mp__caption,
+  .mp__hint {
+    display: none;
+  }
+
+  .mp__top {
+    align-items: center;
+  }
+
+  .mp__title {
+    font-size: 1.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp__chrome,
+  .mp__thumbs,
+  .mp__btn,
+  .mp__nav,
+  .mp__thumb {
+    transition: none;
+  }
+}
