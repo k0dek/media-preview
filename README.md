@@ -38,3 +38,8 @@ npm run preview
 ## Deploy
 
 Static Vite app — works on Vercel with zero config.
+
+## Links
+
+- Live: https://lumen-media-preview.vercel.app
+- Repo: https://github.com/k0dek/media-preview
