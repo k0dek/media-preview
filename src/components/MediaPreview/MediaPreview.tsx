@@ -57,19 +57,28 @@ export function MediaPreview({
   const item = items[index]
   const count = items.length
   const canZoom = !!item && item.kind === "image" && !reduceMotion
+  const isZoomed = zoom > 1
 
   const resetView = useCallback(() => {
     setZoom(1)
     setOffset({ x: 0, y: 0 })
   }, [])
 
+  const requestClose = useCallback(() => {
+    // Clear transforms before shared-element close so morph geometry is clean.
+    setZoom(1)
+    setOffset({ x: 0, y: 0 })
+    onClose()
+  }, [onClose])
+
   const go = useCallback(
     (next: number) => {
       if (!count) return
+      setZoom(1)
+      setOffset({ x: 0, y: 0 })
       onIndexChange(((next % count) + count) % count)
-      resetView()
     },
-    [count, onIndexChange, resetView],
+    [count, onIndexChange],
   )
 
   const zoomBy = useCallback(
@@ -111,6 +120,13 @@ export function MediaPreview({
   }, [open])
 
   useEffect(() => {
+    if (!open) {
+      setZoom(1)
+      setOffset({ x: 0, y: 0 })
+    }
+  }, [open])
+
+  useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -118,7 +134,7 @@ export function MediaPreview({
           resetView()
           return
         }
-        onClose()
+        requestClose()
       }
       if (e.key === "ArrowRight") go(index + 1)
       if (e.key === "ArrowLeft") go(index - 1)
@@ -135,7 +151,7 @@ export function MediaPreview({
     zoom,
     index,
     go,
-    onClose,
+    requestClose,
     resetView,
     zoomBy,
     toggleFullscreen,
@@ -147,10 +163,6 @@ export function MediaPreview({
     const t = window.setTimeout(() => rootRef.current?.focus(), 20)
     return () => window.clearTimeout(t)
   }, [open, index])
-
-  useEffect(() => {
-    resetView()
-  }, [index, resetView])
 
   const onWheel = (e: ReactWheelEvent) => {
     if (!canZoom) return
@@ -185,9 +197,9 @@ export function MediaPreview({
   }
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
-    if (zoom > 1) return
+    if (isZoomed) return
     if (Math.abs(info.offset.y) > DISMISS_Y || Math.abs(info.velocity.y) > 750) {
-      onClose()
+      requestClose()
       return
     }
     if (Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 550) {
@@ -207,7 +219,6 @@ export function MediaPreview({
       tabIndex={open ? -1 : undefined}
       aria-hidden={!open}
     >
-      {/* Fade-only chrome — never wrap the shared image in delayed exit */}
       <AnimatePresence>
         {open && (
           <motion.button
@@ -219,7 +230,7 @@ export function MediaPreview({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
-            onClick={onClose}
+            onClick={requestClose}
           />
         )}
       </AnimatePresence>
@@ -252,21 +263,46 @@ export function MediaPreview({
               </span>
               {canZoom && (
                 <>
-                  <button type="button" className="mp__btn" onClick={() => zoomBy(-0.35)} aria-label="Zoom out">
+                  <button
+                    type="button"
+                    className="mp__btn"
+                    onClick={() => zoomBy(-0.35)}
+                    aria-label="Zoom out"
+                  >
                     <IconZoomOut />
                   </button>
-                  <button type="button" className="mp__btn" onClick={() => zoomBy(0.35)} aria-label="Zoom in">
+                  <button
+                    type="button"
+                    className="mp__btn"
+                    onClick={() => zoomBy(0.35)}
+                    aria-label="Zoom in"
+                  >
                     <IconZoomIn />
                   </button>
                 </>
               )}
-              <button type="button" className="mp__btn" onClick={() => void toggleFullscreen()} aria-label="Fullscreen">
+              <button
+                type="button"
+                className="mp__btn"
+                onClick={() => void toggleFullscreen()}
+                aria-label="Fullscreen"
+              >
                 <IconFullscreen />
               </button>
-              <button type="button" className="mp__btn" onClick={download} aria-label="Download">
+              <button
+                type="button"
+                className="mp__btn"
+                onClick={download}
+                aria-label="Download"
+              >
                 <IconDownload />
               </button>
-              <button type="button" className="mp__btn" onClick={onClose} aria-label="Close">
+              <button
+                type="button"
+                className="mp__btn"
+                onClick={requestClose}
+                aria-label="Close"
+              >
                 <IconClose />
               </button>
             </div>
@@ -285,7 +321,11 @@ export function MediaPreview({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15, delay: 0.08 }}
-            onClick={() => go(index - 1)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              go(index - 1)
+            }}
           >
             <IconChevron className="mp__nav-icon mp__nav-icon--flip" />
           </motion.button>
@@ -303,7 +343,11 @@ export function MediaPreview({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15, delay: 0.08 }}
-            onClick={() => go(index + 1)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              go(index + 1)
+            }}
           >
             <IconChevron />
           </motion.button>
@@ -311,45 +355,46 @@ export function MediaPreview({
       </AnimatePresence>
 
       {/*
-        Shared element lives OUTSIDE AnimatePresence exit delays.
-        Open/close = grid thumb unmounts/remounts in the same commit as this node.
+        Shared image stays outside delayed AnimatePresence exits.
+        No transformed ancestors — drag/zoom live on this node only, and are
+        cleared before close so the return morph matches open.
       */}
       {open && (
-        <motion.div
-          className="mp__stage"
-          drag={zoom === 1 && !reduceMotion ? true : false}
-          dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-          dragElastic={0.2}
-          onDragEnd={onDragEnd}
-          onWheel={onWheel}
-        >
-          <motion.img
-            layoutId={`photo-${item.id}`}
-            className="mp__media"
-            src={item.src}
-            alt={item.title}
-            width={item.width}
-            height={item.height}
-            draggable={false}
-            style={{
-              borderRadius: 16,
-              scale: zoom,
-              x: offset.x,
-              y: offset.y,
-              cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
-            }}
-            transition={morphTransition}
-            onDoubleClick={() => {
-              if (!canZoom) return
-              if (zoom > 1) resetView()
-              else setZoom(2.15)
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-          />
-        </motion.div>
+        <div className="mp__stage" onWheel={onWheel}>
+          <div className="mp__frame">
+            <motion.img
+              key={item.id}
+              layoutId={`photo-${item.id}`}
+              className="mp__media"
+              src={item.src}
+              alt={item.title}
+              width={item.width}
+              height={item.height}
+              draggable={false}
+              drag={!isZoomed && !reduceMotion}
+              dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+              dragElastic={0.18}
+              onDragEnd={onDragEnd}
+              style={{
+                borderRadius: 16,
+                scale: zoom,
+                x: offset.x,
+                y: offset.y,
+                cursor: isZoomed ? (dragging ? "grabbing" : "grab") : "grab",
+              }}
+              transition={morphTransition}
+              onDoubleClick={() => {
+                if (!canZoom) return
+                if (isZoomed) resetView()
+                else setZoom(2.15)
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+            />
+          </div>
+        </div>
       )}
 
       <AnimatePresence>
