@@ -11,18 +11,19 @@ export type PreviewItem = {
   credit: string
 }
 
-export type MorphTransition = {
-  type: "spring"
-  stiffness: number
-  damping: number
-  mass: number
+export type OriginRect = {
+  top: number
+  left: number
+  width: number
+  height: number
 }
 
 export type MediaPreviewProps = {
   items: PreviewItem[]
   index: number
   open: boolean
+  origin: OriginRect | null
   onClose: () => void
   onIndexChange: (index: number) => void
-  morphTransition: MorphTransition
+  onExitComplete?: () => void
 }

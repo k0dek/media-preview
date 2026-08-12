@@ -20,23 +20,48 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "./icons"
-import type { MediaPreviewProps } from "./types"
+import type { MediaPreviewProps, OriginRect } from "./types"
 import "./MediaPreview.css"
 
 const MIN_ZOOM = 1
 const MAX_ZOOM = 4
 
+const spring = {
+  type: "spring" as const,
+  stiffness: 340,
+  damping: 34,
+  mass: 0.85,
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
+}
+
+function targetSize(item: { width: number; height: number }) {
+  const maxW = Math.min(window.innerWidth * 0.92, 980)
+  const maxH = Math.min(window.innerHeight * 0.7, 760)
+  const scale = Math.min(maxW / item.width, maxH / item.height, 1)
+  return {
+    width: Math.round(item.width * scale),
+    height: Math.round(item.height * scale),
+  }
+}
+
+function centerPos(size: { width: number; height: number }) {
+  return {
+    top: Math.round((window.innerHeight - size.height) / 2),
+    left: Math.round((window.innerWidth - size.width) / 2),
+  }
 }
 
 export function MediaPreview({
   items,
   index,
   open,
+  origin,
   onClose,
   onIndexChange,
-  morphTransition,
+  onExitComplete,
 }: MediaPreviewProps) {
   const reduceMotion = useReducedMotion()
   const titleId = useId()
@@ -45,7 +70,6 @@ export function MediaPreview({
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
-  /** Zoom/pan only after shared-element morph finishes. */
   const [gesturesOn, setGesturesOn] = useState(false)
   const panOrigin = useRef<{
     x: number
@@ -53,31 +77,29 @@ export function MediaPreview({
     ox: number
     oy: number
   } | null>(null)
+  const openOrigin = useRef<OriginRect | null>(null)
 
   const item = items[index]
   const count = items.length
   const canZoom = !!item && item.kind === "image" && !reduceMotion
   const isZoomed = zoom > 1
 
+  // Freeze the open-from rect for this session so exit can use an updated tile rect.
+  useEffect(() => {
+    if (open && origin) openOrigin.current = origin
+    if (!open) setGesturesOn(false)
+  }, [open, origin])
+
   const resetView = useCallback(() => {
     setZoom(1)
     setOffset({ x: 0, y: 0 })
   }, [])
-
-  const requestClose = useCallback(() => {
-    setZoom(1)
-    setOffset({ x: 0, y: 0 })
-    setGesturesOn(false)
-    // One frame at identity, then hand layoutId back to the grid tile.
-    requestAnimationFrame(() => onClose())
-  }, [onClose])
 
   const go = useCallback(
     (next: number) => {
       if (!count) return
       setZoom(1)
       setOffset({ x: 0, y: 0 })
-      setGesturesOn(false)
       onIndexChange(((next % count) + count) % count)
     },
     [count, onIndexChange],
@@ -125,7 +147,6 @@ export function MediaPreview({
     if (!open) {
       setZoom(1)
       setOffset({ x: 0, y: 0 })
-      setGesturesOn(false)
     }
   }, [open])
 
@@ -137,7 +158,7 @@ export function MediaPreview({
           resetView()
           return
         }
-        requestClose()
+        onClose()
       }
       if (e.key === "ArrowRight") go(index + 1)
       if (e.key === "ArrowLeft") go(index - 1)
@@ -154,7 +175,7 @@ export function MediaPreview({
     zoom,
     index,
     go,
-    requestClose,
+    onClose,
     resetView,
     zoomBy,
     toggleFullscreen,
@@ -166,12 +187,6 @@ export function MediaPreview({
     const t = window.setTimeout(() => rootRef.current?.focus(), 20)
     return () => window.clearTimeout(t)
   }, [open, index])
-
-  useEffect(() => {
-    if (!open) return
-    const t = window.setTimeout(() => setGesturesOn(true), reduceMotion ? 0 : 650)
-    return () => window.clearTimeout(t)
-  }, [open, index, reduceMotion])
 
   const onWheel = (e: ReactWheelEvent) => {
     if (!canZoom || !gesturesOn) return
@@ -207,12 +222,14 @@ export function MediaPreview({
 
   if (!item) return null
 
-  // Plain CSS transform on a non-motion wrapper — never on the layoutId node.
+  const size = typeof window !== "undefined" ? targetSize(item) : { width: 600, height: 400 }
+  const centered = typeof window !== "undefined" ? centerPos(size) : { top: 0, left: 0 }
+  const from = openOrigin.current ?? origin
+  const to = origin ?? from
+
   const frameStyle =
     gesturesOn && (isZoomed || offset.x !== 0 || offset.y !== 0)
-      ? {
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-        }
+      ? { transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }
       : undefined
 
   return (
@@ -236,7 +253,7 @@ export function MediaPreview({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
-            onClick={requestClose}
+            onClick={onClose}
           />
         )}
       </AnimatePresence>
@@ -306,7 +323,7 @@ export function MediaPreview({
               <button
                 type="button"
                 className="mp__btn"
-                onClick={requestClose}
+                onClick={onClose}
                 aria-label="Close"
               >
                 <IconClose />
@@ -360,49 +377,96 @@ export function MediaPreview({
         )}
       </AnimatePresence>
 
-      {open && (
-        <div className="mp__stage" onWheel={onWheel}>
-          <div
-            className="mp__frame"
-            style={{
-              ...frameStyle,
-              cursor: isZoomed
-                ? dragging
-                  ? "grabbing"
-                  : "grab"
-                : "default",
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onDoubleClick={() => {
-              if (!canZoom || !gesturesOn) return
-              if (isZoomed) resetView()
-              else setZoom(2.15)
-            }}
-          >
-            {/*
-              layoutId node must stay free of Motion drag/x/y/scale and of
-              motion parent transforms — those were causing stuck off-center
-              images and a broken close morph.
-            */}
-            <motion.img
-              key={item.id}
-              layoutId={`photo-${item.id}`}
-              className="mp__media"
-              src={item.src}
-              alt={item.title}
-              width={item.width}
-              height={item.height}
-              draggable={false}
-              style={{ borderRadius: 16 }}
-              transition={morphTransition}
-              onLayoutAnimationComplete={() => setGesturesOn(true)}
-            />
-          </div>
-        </div>
-      )}
+      <AnimatePresence
+        onExitComplete={() => {
+          openOrigin.current = null
+          onExitComplete?.()
+        }}
+      >
+        {open && from && (
+          <motion.div key="photo-stage" className="mp__stage" onWheel={onWheel}>
+            <motion.div
+              className="mp__frame"
+              initial={
+                reduceMotion
+                  ? {
+                      ...centered,
+                      width: size.width,
+                      height: size.height,
+                      opacity: 0,
+                    }
+                  : {
+                      top: from.top,
+                      left: from.left,
+                      width: from.width,
+                      height: from.height,
+                      opacity: 1,
+                    }
+              }
+              animate={{
+                top: centered.top,
+                left: centered.left,
+                width: size.width,
+                height: size.height,
+                opacity: 1,
+              }}
+              exit={
+                reduceMotion
+                  ? { opacity: 0 }
+                  : to
+                    ? {
+                        top: to.top,
+                        left: to.left,
+                        width: to.width,
+                        height: to.height,
+                        opacity: 1,
+                      }
+                    : { opacity: 0 }
+              }
+              transition={reduceMotion ? { duration: 0.15 } : spring}
+              onAnimationComplete={() => {
+                if (open) setGesturesOn(true)
+              }}
+              style={{
+                ...frameStyle,
+                position: "fixed",
+                borderRadius: 16,
+                overflow: "hidden",
+                cursor: isZoomed
+                  ? dragging
+                    ? "grabbing"
+                    : "grab"
+                  : "default",
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onDoubleClick={() => {
+                if (!canZoom || !gesturesOn) return
+                if (isZoomed) resetView()
+                else setZoom(2.15)
+              }}
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.img
+                  key={item.id}
+                  className="mp__media"
+                  src={item.src}
+                  alt={item.title}
+                  width={item.width}
+                  height={item.height}
+                  draggable={false}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.18 }}
+                />
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {open && (
