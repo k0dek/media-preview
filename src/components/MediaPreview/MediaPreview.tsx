@@ -11,7 +11,6 @@ import {
   AnimatePresence,
   motion,
   useReducedMotion,
-  type PanInfo,
 } from "motion/react"
 import {
   IconChevron,
@@ -26,7 +25,6 @@ import "./MediaPreview.css"
 
 const MIN_ZOOM = 1
 const MAX_ZOOM = 4
-const DISMISS_Y = 110
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
@@ -47,7 +45,7 @@ export function MediaPreview({
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
-  /** Gestures/zoom only after shared-element morph finishes — avoids off-center residue. */
+  /** Zoom/pan only after shared-element morph finishes. */
   const [gesturesOn, setGesturesOn] = useState(false)
   const panOrigin = useRef<{
     x: number
@@ -70,7 +68,7 @@ export function MediaPreview({
     setZoom(1)
     setOffset({ x: 0, y: 0 })
     setGesturesOn(false)
-    // Commit identity transforms for one frame, then hand layoutId back to the grid.
+    // One frame at identity, then hand layoutId back to the grid tile.
     requestAnimationFrame(() => onClose())
   }, [onClose])
 
@@ -169,7 +167,6 @@ export function MediaPreview({
     return () => window.clearTimeout(t)
   }, [open, index])
 
-  // Fallback if layout animation complete never fires (reduced motion / interrupted).
   useEffect(() => {
     if (!open) return
     const t = window.setTimeout(() => setGesturesOn(true), reduceMotion ? 0 : 650)
@@ -208,18 +205,15 @@ export function MediaPreview({
     setDragging(false)
   }
 
-  const onDragEnd = (_: unknown, info: PanInfo) => {
-    if (isZoomed) return
-    if (Math.abs(info.offset.y) > DISMISS_Y || Math.abs(info.velocity.y) > 750) {
-      requestClose()
-      return
-    }
-    if (Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 550) {
-      go(info.offset.x < 0 ? index + 1 : index - 1)
-    }
-  }
-
   if (!item) return null
+
+  // Plain CSS transform on a non-motion wrapper — never on the layoutId node.
+  const frameStyle =
+    gesturesOn && (isZoomed || offset.x !== 0 || offset.y !== 0)
+      ? {
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+        }
+      : undefined
 
   return (
     <div
@@ -367,36 +361,16 @@ export function MediaPreview({
       </AnimatePresence>
 
       {open && (
-        <div className="mp__stage">
-          {/*
-            Zoom/drag live on the FRAME, never on the layoutId image.
-            Gestures stay off until morph completes so centering can't drift.
-          */}
-          <motion.div
+        <div className="mp__stage" onWheel={onWheel}>
+          <div
             className="mp__frame"
-            drag={gesturesOn && !isZoomed && !reduceMotion}
-            dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-            dragElastic={0.18}
-            onDragEnd={onDragEnd}
-            onWheel={onWheel}
-            animate={
-              gesturesOn
-                ? { scale: zoom, x: offset.x, y: offset.y }
-                : { scale: 1, x: 0, y: 0 }
-            }
-            transition={
-              gesturesOn
-                ? { type: "spring", stiffness: 400, damping: 40 }
-                : { duration: 0 }
-            }
             style={{
+              ...frameStyle,
               cursor: isZoomed
                 ? dragging
                   ? "grabbing"
                   : "grab"
-                : gesturesOn
-                  ? "grab"
-                  : "default",
+                : "default",
             }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -408,6 +382,11 @@ export function MediaPreview({
               else setZoom(2.15)
             }}
           >
+            {/*
+              layoutId node must stay free of Motion drag/x/y/scale and of
+              motion parent transforms — those were causing stuck off-center
+              images and a broken close morph.
+            */}
             <motion.img
               key={item.id}
               layoutId={`photo-${item.id}`}
@@ -421,7 +400,7 @@ export function MediaPreview({
               transition={morphTransition}
               onLayoutAnimationComplete={() => setGesturesOn(true)}
             />
-          </motion.div>
+          </div>
         </div>
       )}
 
