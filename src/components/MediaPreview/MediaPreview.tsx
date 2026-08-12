@@ -412,80 +412,82 @@ export function MediaPreview({
         }}
       >
         {open && readyBox && from && (
-          <div key="photo-stage" className="mp__stage" onWheel={onWheel}>
-            <motion.div
-              className="mp__frame"
-              initial={
-                reduceMotion
-                  ? { opacity: 0, x: 0, y: 0, scaleX: 1, scaleY: 1 }
-                  : { opacity: 1, ...flipFrom(from, size, pos) }
-              }
-              animate={{ opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 }}
-              exit={
-                reduceMotion
-                  ? { opacity: 0 }
-                  : to
-                    ? { opacity: 1, ...flipFrom(to, size, pos) }
-                    : { opacity: 0 }
-              }
-              transition={reduceMotion ? { duration: 0.15 } : spring}
-              onAnimationComplete={() => {
-                if (open) setGesturesOn(true)
-              }}
+          <motion.div
+            key="photo-frame"
+            className="mp__frame"
+            initial={
+              reduceMotion
+                ? { opacity: 0, x: 0, y: 0, scaleX: 1, scaleY: 1 }
+                : { opacity: 1, ...flipFrom(from, size, pos) }
+            }
+            animate={{ opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 }}
+            exit={
+              reduceMotion
+                ? { opacity: 0 }
+                : to
+                  ? { opacity: 1, ...flipFrom(to, size, pos) }
+                  : { opacity: 0 }
+            }
+            transition={reduceMotion ? { duration: 0.15 } : spring}
+            onAnimationComplete={() => {
+              if (open) setGesturesOn(true)
+            }}
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              width: size.width,
+              height: size.height,
+              borderRadius: 16,
+              overflow: "hidden",
+              transformOrigin: "center center",
+              zIndex: 2,
+              pointerEvents: "auto",
+            }}
+            onWheel={onWheel}
+          >
+            <div
+              className="mp__zoom"
               style={{
-                position: "fixed",
-                top: pos.top,
-                left: pos.left,
-                width: size.width,
-                height: size.height,
-                borderRadius: 16,
-                overflow: "hidden",
-                transformOrigin: "center center",
+                width: "100%",
+                height: "100%",
+                transform:
+                  gesturesOn && (isZoomed || offset.x || offset.y)
+                    ? `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`
+                    : undefined,
+                cursor: isZoomed
+                  ? dragging
+                    ? "grabbing"
+                    : "grab"
+                  : "default",
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onDoubleClick={() => {
+                if (!canZoom || !gesturesOn) return
+                if (isZoomed) resetView()
+                else setZoom(2.15)
               }}
             >
-              <div
-                className="mp__zoom"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  transform:
-                    gesturesOn && (isZoomed || offset.x || offset.y)
-                      ? `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`
-                      : undefined,
-                  cursor: isZoomed
-                    ? dragging
-                      ? "grabbing"
-                      : "grab"
-                    : "default",
-                }}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
-                onDoubleClick={() => {
-                  if (!canZoom || !gesturesOn) return
-                  if (isZoomed) resetView()
-                  else setZoom(2.15)
-                }}
-              >
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.img
-                    key={item.id}
-                    className="mp__media"
-                    src={item.src}
-                    alt={item.title}
-                    width={item.width}
-                    height={item.height}
-                    draggable={false}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: reduceMotion ? 0 : 0.16 }}
-                  />
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          </div>
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.img
+                  key={item.id}
+                  className="mp__media"
+                  src={item.src}
+                  alt={item.title}
+                  width={item.width}
+                  height={item.height}
+                  draggable={false}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.16 }}
+                />
+              </AnimatePresence>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
