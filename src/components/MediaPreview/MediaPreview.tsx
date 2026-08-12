@@ -168,13 +168,24 @@ export function MediaPreview({
   useEffect(() => {
     if (!open) return
     const sbw = window.innerWidth - document.documentElement.clientWidth
-    const prevOverflow = document.body.style.overflow
-    const prevPadding = document.body.style.paddingRight
+    const html = document.documentElement
+    const prev = {
+      bodyOverflow: document.body.style.overflow,
+      bodyPadding: document.body.style.paddingRight,
+      htmlOverflow: html.style.overflow,
+      htmlPadding: html.style.paddingRight,
+    }
     document.body.style.overflow = "hidden"
-    if (sbw > 0) document.body.style.paddingRight = `${sbw}px`
+    html.style.overflow = "hidden"
+    if (sbw > 0) {
+      document.body.style.paddingRight = `${sbw}px`
+      html.style.paddingRight = `${sbw}px`
+    }
     return () => {
-      document.body.style.overflow = prevOverflow
-      document.body.style.paddingRight = prevPadding
+      document.body.style.overflow = prev.bodyOverflow
+      document.body.style.paddingRight = prev.bodyPadding
+      html.style.overflow = prev.htmlOverflow
+      html.style.paddingRight = prev.htmlPadding
     }
   }, [open])
 
